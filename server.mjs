@@ -18,6 +18,7 @@ const port = Number(process.env.PORT || 3000);
 const token = process.env.SQUARE_ACCESS_TOKEN || '';
 const locationId = process.env.SQUARE_LOCATION_ID || '';
 const env = process.env.SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox';
+const allowedOrigins = new Set((process.env.SQUARE_ALLOWED_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean));
 const squareBase = env === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
 let catalog;
 async function getCatalog() {
@@ -89,9 +90,24 @@ async function handleCheckout(req, res) {
 }
 const server=http.createServer(async(req,res)=>{
   try {
+    const origin=req.headers.origin;
+    if (origin && allowedOrigins.has(origin)) {
+      res.setHeader('Access-Control-Allow-Origin',origin);
+      res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers','Content-Type');
+      res.setHeader('Vary','Origin');
+    }
+    if (req.method==='OPTIONS') {
+      if (!origin || !allowedOrigins.has(origin)) return json(res,403,{error:'This website is not allowed to use the Square checkout server.'});
+      res.writeHead(204); return res.end();
+    }
     const url=new URL(req.url,'http://localhost');
     if (req.method==='GET' && url.pathname==='/api/status') return json(res,200,{ready:Boolean(token && locationId),provider:'Square'});
     if (req.method==='POST' && url.pathname==='/api/square-checkout') return await handleCheckout(req,res);
+    if (req.method==='GET' && url.pathname==='/config.js') {
+      const file=await readFile(path.join(root,'config.js'));
+      res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8','Content-Length':file.length,'Cache-Control':'no-store'});return res.end(file);
+    }
     if (req.method==='GET' && (url.pathname==='/' || url.pathname==='/index.html')) {
       const file=await readFile(path.join(root,'index.html'));
       res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Content-Length':file.length,'Cache-Control':'no-store'});return res.end(file);
