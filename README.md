@@ -1,15 +1,25 @@
 # Pathibhara Trading storefront
 
-Customer shop website for Pathibhara Trading, an Asian grocery in Chiryu, Aichi. The catalog contains 732 items with prices, SKUs, and stock from the October 3, 2026 Square export.
+The customer storefront and shopping cart run from `index.html`. It includes 732 products with prices and stock; SKU values remain in the catalog data for store reference and are not shown to shoppers. Square Checkout uses `server.mjs`; its access token is never sent to the browser.
+
+## Square setup
+
+1. Set up an active Square seller account for Japan and enable online checkout.
+2. Copy `.env.example` to `.env` for local use, or set the same values as private environment variables on your host:
+   - `SQUARE_ENVIRONMENT=sandbox` for payment testing; use `production` only after sandbox review.
+   - `SQUARE_ACCESS_TOKEN` from the Square Developer Dashboard.
+   - `SQUARE_LOCATION_ID` for the store.
+3. Start the site with `npm start` and open `http://localhost:3000`.
+4. Confirm card, Apple Pay, and Google Pay availability in the Square account before enabling live payments. Checkout is hosted by Square; payment methods are controlled by account eligibility and settings.
+
+Never publish the access token or put it into `index.html`. Square sends buyers to its hosted checkout page. Product lines use the Square catalog tokens from the supplied export; Square applies the catalog's item settings at checkout. The storefront's displayed stock is the export snapshot and is not a live inventory feed.
 
 ## GitHub Pages
 
-The included workflow publishes the repository root to GitHub Pages when the main branch changes. Enable it in **Settings → Pages → Build and deployment → Source → GitHub Actions**. Product browsing, categories, language selection, search, and the shopping cart run on the static site.
+The included workflow publishes the repository root to GitHub Pages when `main` changes. In repository settings, set **Pages → Build and deployment → Source** to **GitHub Actions**. The catalog, photos, descriptions, language selector, category filters, and shopping cart are static website features.
 
-## Square Checkout
+## Square Checkout on GitHub Pages
 
-GitHub Pages cannot run the Node server. To enable Square payments, deploy server.mjs on a Node-capable host and set SQUARE_ACCESS_TOKEN, SQUARE_LOCATION_ID, SQUARE_ENVIRONMENT, and SQUARE_ALLOWED_ORIGINS as private host variables. Set SQUARE_ALLOWED_ORIGINS to the exact GitHub Pages origin, then set window.PATHIBHARA_API_BASE in config.js to the deployed server origin. Never add Square credentials to this repository or config.js. Checkout remains disabled until the server reports that Square is ready.
+GitHub Pages cannot run the Node server. To enable Square checkout, deploy `server.mjs` on a Node-capable host, set `SQUARE_ACCESS_TOKEN`, `SQUARE_LOCATION_ID`, and `SQUARE_ENVIRONMENT` as private host variables, and set `SQUARE_ALLOWED_ORIGINS` to the exact GitHub Pages site origin. Then put the deployed server origin into `config.js` as `window.PATHIBHARA_API_BASE`. Never place Square credentials in this repository or in `config.js`. Checkout stays disabled until the server reports that it is ready.
 
-## Photos and descriptions
-
-Descriptions are short customer-facing summaries based on the product name and category; check the package for ingredients, preparation, and storage information. Product photos link to Ambika Japan’s public catalog. There are exact name/size photo matches for 74 items; the remaining catalog items use representative category photos. The stock values are an export snapshot, so please call the store to confirm availability.
+The displayed stock is the catalog export snapshot from October 3, 2026; call the store to confirm current availability. Verified exact name/size matches use the product photo from Ambika Japan and link to that product listing (74 items). Items without a verified photo use a category illustration instead of an unrelated product package image. Descriptions are brief summaries based on product names and categories; refer to the package for ingredients and preparation details.
