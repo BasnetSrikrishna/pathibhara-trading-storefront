@@ -43,6 +43,40 @@ function rateLimited(req) {
   recent.push(now); attempts.set(key, recent);
   return recent.length > 10;
 }
+async function handleInventory(req, res) {
+  if (rateLimited(req)) return json(res, 429, {error:'Too many inventory refreshes. Please wait and try again.'});
+  if (!token || !locationId) return json(res, 503, {error:'Square inventory sync is not configured yet.'});
+  const products = await getCatalog();
+  const ids = [...new Set(products.map(p => p.squareId).filter(id => typeof id === 'string' && id.length))];
+  const counts = {};
+  let cursor;
+  do {
+    const payload = {catalog_object_ids:ids, location_ids:[locationId], states:['IN_STOCK'], limit:1000};
+    if (cursor) payload.cursor = cursor;
+    let response;
+    try {
+      response = await fetch(`${squareBase}/v2/inventory/counts/batch-retrieve`, {
+        method:'POST',
+        headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json','Square-Version':'2026-09-16'},
+        body:JSON.stringify(payload)
+      });
+    } catch { return json(res, 502, {error:'Could not reach Square inventory. Please try again.'}); }
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error('Square inventory error', response.status, JSON.stringify(result.errors || []));
+      return json(res, 502, {error:'Square inventory could not be read. Check the token permissions and location settings.'});
+    }
+    for (const count of result.counts || []) {
+      const quantity = Number(count.quantity);
+      if (count.state === 'IN_STOCK' && count.catalog_object_id && Number.isFinite(quantity) && !(count.catalog_object_id in counts)) {
+        counts[count.catalog_object_id] = {quantity, calculatedAt:count.calculated_at || null};
+      }
+    }
+    cursor = result.cursor || undefined;
+  } while (cursor);
+  return json(res, 200, {counts, updatedAt:new Date().toISOString()});
+}
+
 async function handleCheckout(req, res) {
   if (rateLimited(req)) return json(res, 429, {error:'Too many checkout attempts. Please wait and try again.'});
   if (!token || !locationId) return json(res, 503, {error:'Square checkout is not configured yet.'});
@@ -103,6 +137,7 @@ const server=http.createServer(async(req,res)=>{
     }
     const url=new URL(req.url,'http://localhost');
     if (req.method==='GET' && url.pathname==='/api/status') return json(res,200,{ready:Boolean(token && locationId),provider:'Square'});
+    if (req.method==='GET' && url.pathname==='/api/inventory') return await handleInventory(req,res);
     if (req.method==='POST' && url.pathname==='/api/square-checkout') return await handleCheckout(req,res);
     if (req.method==='GET' && url.pathname==='/config.js') {
       const file=await readFile(path.join(root,'config.js'));
